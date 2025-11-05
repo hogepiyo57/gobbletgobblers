@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ゴブレットゴブラーズ</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <h1>ゴブレットゴブラーズ</h1>
+
+  <div id="game">
+    <!-- 左：先手（緑） -->
+    <div id="tray-green" class="tray" aria-label="先手（緑）の持ち駒"></div>
+
+    <!-- 中央：3×3盤 -->
+    <div id="board" aria-label="3×3の盤面"></div>
+
+    <!-- 右：後手（オレンジ） -->
+    <div id="tray-orange" class="tray" aria-label="後手（オレンジ）の持ち駒"></div>
+  </div>
+
+  <div id="controls">
+    <div id="turn">手番：緑</div>
+    <button id="undo">一手戻る</button>
+    <button id="reset">最初から</button>
+  </div>
+
+  <!-- 勝利演出用オーバーレイ -->
+  <div id="overlay" class="hidden">
+    <div id="overlay-content">
+      <div id="winner-text"></div>
+      <button id="overlay-reset">もう一回</button>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
+
