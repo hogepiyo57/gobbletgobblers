@@ -1,4 +1,10 @@
 const boardEl = document.getElementById('board');
+
+
+if(payload.src === 'tray'){
+if(payload.player !== currentPlayer) return; // 手番外は不可
+if(tray[payload.player][payload.size] <= 0) return;
+move = { player: payload.player, size: payload.size, from: { type:'tray' } };
 } else if(payload.src === 'board'){
 // 盤上の駒を動かす：トップかつ自分の駒のみ
 const sIdx = payload.index;
