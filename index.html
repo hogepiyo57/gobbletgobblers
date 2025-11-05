@@ -1,20 +1,26 @@
-<!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>ゴブレットゴブラーズ</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ゴブレットゴブラーズ</title>
+<link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <h1>ゴブレットゴブラーズ</h1>
+<h1>ゴブレットゴブラーズ</h1>
+<div id="game">
+<div id="tray-green" class="tray" aria-label="先手（緑）の持ち駒"></div>
+<div id="board" aria-label="3×3の盤面"></div>
+<div id="tray-orange" class="tray" aria-label="後手（オレンジ）の持ち駒"></div>
+</div>
 
-  <div id="board"></div>
 
-  <div id="controls">
-    <button id="undo">一手戻る</button>
-    <button id="reset">最初から</button>
-  </div>
+<div id="controls">
+<div id="turn">先手：緑</div>
+<button id="undo">一手戻る</button>
+<button id="reset">最初から</button>
+</div>
 
-  <script src="script.js"></script>
+
+<script src="script.js"></script>
 </body>
 </html>
