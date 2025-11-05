@@ -18,11 +18,44 @@ let history = [];
 let cells;
 let tray;
 
+// --------------- 共通ユーティリティ ----------------
+function sizeName(n) {
+  return n === 1 ? 'small' : n === 2 ? 'medium' : 'large';
+}
+
+// dataTransferから安全にペイロードを取り出す
+function getPayloadFromDataTransfer(dt) {
+  // 独自タイプを優先
+  const custom = dt.getData('application/x-gobblers');
+  if (custom) {
+    try {
+      return JSON.parse(custom);
+    } catch (e) {}
+  }
+  // 通常テキスト
+  const txt = dt.getData('text/plain');
+  if (txt) {
+    try {
+      return JSON.parse(txt);
+    } catch (e) {}
+  }
+  return null;
+}
+
+// dragstartにつけるヘルパ
+function setDragPayload(e, payload) {
+  const json = JSON.stringify(payload);
+  e.dataTransfer.setData('application/x-gobblers', json);
+  e.dataTransfer.setData('text/plain', json);
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+// --------------- 初期化 ----------------
 function initState() {
   cells = Array(SIZE * SIZE).fill(0).map(() => []);
   tray = {
     green: { 1: PER_SIZE_COUNT, 2: PER_SIZE_COUNT, 3: PER_SIZE_COUNT },
-    orange: { 1: PER_SIZE_COUNT, 2: PER_SIZE_COUNT, 3: PER_SIZE_COUNT }
+    orange: { 1: PER_SIZE_COUNT, 2: PER_SIZE_COUNT, 3: PER_SIZE_COUNT },
   };
   currentPlayer = 'green';
   gameOver = false;
@@ -46,6 +79,7 @@ function createBoard() {
   }
 }
 
+// --------------- レンダリング ----------------
 function renderBoard(winLine = null) {
   const cellEls = document.querySelectorAll('.cell');
   cellEls.forEach((cellEl, idx) => {
@@ -58,20 +92,25 @@ function renderBoard(winLine = null) {
       img.src = `images/${top.player}_${sizeName(top.size)}.png`;
       img.alt = `${top.player} ${sizeName(top.size)}`;
       img.className = `size-${top.size}`;
+
+      // ここがポイント：GitHub上でも確実にdragstartが走るようにする
       if (!gameOver && top.player === currentPlayer) {
         img.draggable = true;
         img.classList.add('draggable-piece');
         img.addEventListener('dragstart', e => {
-          e.dataTransfer.setData(
-            'text/plain',
-            JSON.stringify({ src: 'board', index: idx, size: top.size, player: top.player })
-          );
+          e.stopPropagation();
+          setDragPayload(e, {
+            src: 'board',
+            index: idx,
+            size: top.size,
+            player: top.player,
+          });
         });
       }
+
       cellEl.appendChild(img);
     }
 
-    // 勝ちラインなら光らせる
     if (winLine && winLine.includes(idx)) {
       cellEl.classList.add('win');
     }
@@ -103,13 +142,20 @@ function renderTrayFor(player, host) {
       img.src = `images/${player}_${sizeName(size)}.png`;
       img.alt = `${player} ${sizeName(size)}`;
       img.className = `size-${size}`;
+
       if (!gameOver && currentPlayer === player) {
         img.draggable = true;
         img.classList.add('draggable-piece');
         img.addEventListener('dragstart', e => {
-          e.dataTransfer.setData('text/plain', JSON.stringify({ src: 'tray', player, size }));
+          e.stopPropagation();
+          setDragPayload(e, {
+            src: 'tray',
+            player,
+            size,
+          });
         });
       }
+
       slots[k++].appendChild(img);
     }
   });
@@ -123,23 +169,29 @@ function renderAll(winLine = null) {
     : `手番：${currentPlayer === 'green' ? '緑' : 'オレンジ'}`;
 }
 
+// --------------- ドロップ処理 ----------------
 function onDropToCell(e) {
   e.preventDefault();
   e.currentTarget.classList.remove('droptarget');
   if (gameOver) return;
 
-  const payload = JSON.parse(e.dataTransfer.getData('text/plain'));
+  const payload = getPayloadFromDataTransfer(e.dataTransfer);
+  if (!payload) return;
+
   const targetIndex = Number(e.currentTarget.dataset.index);
   const targetStack = cells[targetIndex];
   const targetTop = targetStack[targetStack.length - 1];
 
   let move = null;
 
+  // トレイから
   if (payload.src === 'tray') {
     if (payload.player !== currentPlayer) return;
     if (tray[payload.player][payload.size] <= 0) return;
     move = { player: payload.player, size: payload.size, from: { type: 'tray' } };
-  } else if (payload.src === 'board') {
+  }
+  // 盤上から移動
+  else if (payload.src === 'board') {
     const srcIndex = payload.index;
     const srcStack = cells[srcIndex];
     const srcTop = srcStack[srcStack.length - 1];
@@ -147,22 +199,32 @@ function onDropToCell(e) {
     if (srcTop.player !== currentPlayer) return;
     if (srcTop.size !== payload.size) return;
     if (srcIndex === targetIndex) return;
-    move = { player: srcTop.player, size: srcTop.size, from: { type: 'board', index: srcIndex } };
+
+    move = {
+      player: srcTop.player,
+      size: srcTop.size,
+      from: { type: 'board', index: srcIndex },
+    };
   }
 
   if (!move) return;
+
+  // サイズチェック
   if (targetTop && targetTop.size >= move.size) return;
 
   pushHistory();
 
+  // 元から削除 or トレイから減らす
   if (move.from.type === 'tray') {
     tray[move.player][move.size]--;
   } else {
     cells[move.from.index].pop();
   }
 
+  // 置く
   cells[targetIndex].push({ player: move.player, size: move.size });
 
+  // 勝ち判定
   const winInfo = checkWin(move.player);
   if (winInfo.won) {
     gameOver = true;
@@ -174,21 +236,21 @@ function onDropToCell(e) {
   }
 }
 
-function sizeName(n) {
-  return n === 1 ? 'small' : n === 2 ? 'medium' : 'large';
-}
-
-// 勝敗判定：勝ってたら {won:true, line:[...]} を返す
+// --------------- 勝敗・履歴 ----------------
 function checkWin(player) {
-  const topByCell = Array(9).fill(null).map((_, i) => {
-    const s = cells[i];
-    return s.length ? s[s.length - 1].player : null;
-  });
+  const topByCell = Array(9)
+    .fill(null)
+    .map((_, i) => {
+      const s = cells[i];
+      return s.length ? s[s.length - 1].player : null;
+    });
+
   const lines = [
     [0,1,2],[3,4,5],[6,7,8],
     [0,3,6],[1,4,7],[2,5,8],
     [0,4,8],[2,4,6],
   ];
+
   for (const line of lines) {
     if (line.every(i => topByCell[i] === player)) {
       return { won: true, line };
@@ -201,7 +263,7 @@ function deepCloneState() {
   return {
     currentPlayer,
     gameOver,
-    cells: cells.map(stack => stack.map(p => ({ ...p }))),
+    cells: cells.map(st => st.map(p => ({ ...p }))),
     tray: { green: { ...tray.green }, orange: { ...tray.orange } },
   };
 }
@@ -213,7 +275,7 @@ function pushHistory() {
 function restoreState(state) {
   currentPlayer = state.currentPlayer;
   gameOver = state.gameOver;
-  cells = state.cells.map(stack => stack.map(p => ({ ...p })));
+  cells = state.cells.map(st => st.map(p => ({ ...p })));
   tray = { green: { ...state.tray.green }, orange: { ...state.tray.orange } };
   hideWinOverlay();
   renderAll();
@@ -231,22 +293,21 @@ function reset() {
   renderAll();
 }
 
+// --------------- 勝利オーバーレイ ----------------
 function showWinOverlay(player) {
-  const name = player === 'green' ? '緑の勝ち！' : 'オレンジの勝ち！';
-  winnerTextEl.textContent = name;
+  winnerTextEl.textContent = player === 'green' ? '緑の勝ち！' : 'オレンジの勝ち！';
   overlayEl.classList.remove('hidden');
 }
-
 function hideWinOverlay() {
   overlayEl.classList.add('hidden');
 }
 
-// イベント
+// --------------- イベント ----------------
 undoBtn.addEventListener('click', undo);
 resetBtn.addEventListener('click', reset);
 overlayResetBtn.addEventListener('click', reset);
 
-// 起動
+// --------------- 起動 ----------------
 initState();
 createBoard();
 renderAll();
